@@ -314,22 +314,28 @@ const codexProvider: ModelProvider & {
   hasCredentials,
 
   async validateCredentials(credential: string): Promise<boolean> {
+    logger.info(`[codex] validateCredentials() called with credential: ${credential ? credential.substring(0, 10) + '...' : 'empty'}`);
     // Empty credential is valid if we have OAuth or env-based auth
     if (!credential || credential === "") {
-      return hasCredentials();
+      const hasCreds = hasCredentials();
+      logger.info(`[codex] validateCredentials() empty credential, hasCredentials: ${hasCreds}`);
+      return hasCreds;
     }
 
     // API key format: sk-... (OpenAI format)
     if (!credential.startsWith("sk-")) {
+      logger.info(`[codex] validateCredentials() credential doesn't start with sk-, returning false`);
       return false;
     }
 
     try {
+      logger.info(`[codex] validateCredentials() testing API key...`);
       const { Codex } = await loadCodexSDK();
       const codex = new Codex({ apiKey: credential });
       // Start a minimal thread to validate
       const thread = codex.startThread();
       // Thread creation succeeds if credentials are valid
+      logger.info(`[codex] validateCredentials() API key valid: ${!!thread}`);
       return !!thread;
     } catch (error) {
       logger.error("[codex] Credential validation failed:", error);
@@ -380,11 +386,16 @@ class CodexClient implements ModelClient {
   }
 
   private async getCodex() {
+    logger.info(`[codex] getCodex() called, this.codex exists: ${!!this.codex}`);
     if (!this.codex) {
+      logger.info(`[codex] getCodex() loading SDK...`);
       const { Codex } = await loadCodexSDK();
+      logger.info(`[codex] getCodex() SDK loaded, getting auth...`);
       const auth = getAuth();
+      logger.info(`[codex] getCodex() auth result: ${auth ? auth.type : 'null'}, authType: ${this.authType}`);
 
       if (this.authType === "oauth" && auth?.accessToken) {
+        logger.info(`[codex] getCodex() creating Codex with OAuth token...`);
         // Use OAuth access token
         this.codex = new Codex({
           accessToken: auth.accessToken,
@@ -392,6 +403,7 @@ class CodexClient implements ModelClient {
         });
         logger.info(`[codex] Initialized with OAuth (${auth.email || "user"})`);
       } else if (this.credential) {
+        logger.info(`[codex] getCodex() creating Codex with API key...`);
         // Use API key
         this.codex = new Codex({
           apiKey: this.credential,
@@ -399,6 +411,7 @@ class CodexClient implements ModelClient {
         });
         logger.info(`[codex] Initialized with API key`);
       } else {
+        logger.error(`[codex] getCodex() NO VALID CREDENTIALS - authType=${this.authType}, hasAuth=${!!auth}, hasCredential=${!!this.credential}`);
         throw new Error("No valid credentials available. Run: codex login");
       }
     }
@@ -406,7 +419,9 @@ class CodexClient implements ModelClient {
   }
 
   async *query(opts: ModelQueryOptions): AsyncGenerator<unknown> {
+    logger.info(`[codex] query() starting with prompt: ${opts.prompt.substring(0, 100)}...`);
     const codex = await this.getCodex();
+    logger.info(`[codex] query() got codex instance`);
 
     try {
       let thread: any;
@@ -457,9 +472,13 @@ class CodexClient implements ModelClient {
       }
 
       // Use streaming to get real-time events
+      logger.info(`[codex] query() calling runStreamed...`);
       const { events } = await thread.runStreamed(prompt);
+      logger.info(`[codex] query() got events iterator, starting iteration...`);
 
       for await (const event of events) {
+        logger.info(`[codex] query() event: ${event.type}`);
+
         switch (event.type) {
           case "thread.started":
             sessionId = event.thread_id || thread.id || "";
