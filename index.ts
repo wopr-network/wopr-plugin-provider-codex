@@ -398,11 +398,15 @@ class CodexClient implements ModelClient {
 
     try {
       let thread: any;
+      let sessionId: string = "";
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
 
       // Session resumption via thread ID
       if (opts.resume) {
         logger.info(`[codex] Resuming thread: ${opts.resume}`);
         thread = codex.resumeThread(opts.resume);
+        sessionId = opts.resume;
       } else {
         // Start new thread with options
         const threadOptions: any = {
@@ -428,12 +432,6 @@ class CodexClient implements ModelClient {
         thread = codex.startThread(threadOptions);
       }
 
-      // Yield thread ID for session tracking (feature parity with Anthropic)
-      if (thread.id) {
-        yield { type: 'session_id', session_id: thread.id };
-        logger.info(`[codex] Thread ID: ${thread.id}`);
-      }
-
       // Prepare prompt with images if provided
       let prompt = opts.prompt;
       if (opts.images && opts.images.length > 0) {
@@ -452,7 +450,10 @@ class CodexClient implements ModelClient {
       for await (const event of events) {
         switch (event.type) {
           case "thread.started":
-            yield { type: 'system', subtype: 'init', thread_id: event.thread_id };
+            sessionId = event.thread_id || thread.id || "";
+            // Match Anthropic format: { type: 'system', subtype: 'init', session_id: '...' }
+            yield { type: 'system', subtype: 'init', session_id: sessionId };
+            logger.info(`[codex] Session ID: ${sessionId}`);
             break;
 
           case "turn.started":
@@ -460,47 +461,86 @@ class CodexClient implements ModelClient {
             break;
 
           case "item.completed":
-            // Handle different item types
+            // Handle different item types - wrap in Anthropic 'assistant' format
             if (event.item.type === "agent_message") {
-              yield { type: 'text', text: event.item.text };
-            } else if (event.item.type === "reasoning") {
-              yield { type: 'reasoning', text: event.item.text };
-            } else if (event.item.type === "command_execution") {
+              // Match Anthropic format: { type: 'assistant', message: { content: [{ type: 'text', text: '...' }] }}
               yield {
-                type: 'tool_use',
-                name: 'bash',
-                input: { command: event.item.command },
-                output: event.item.aggregated_output,
+                type: 'assistant',
+                message: {
+                  content: [{ type: 'text', text: event.item.text }]
+                }
+              };
+            } else if (event.item.type === "reasoning") {
+              // Reasoning can be passed through as system message
+              yield { type: 'system', subtype: 'reasoning', content: event.item.text };
+            } else if (event.item.type === "command_execution") {
+              // Tool use format matching Anthropic
+              yield {
+                type: 'assistant',
+                message: {
+                  content: [{
+                    type: 'tool_use',
+                    name: 'bash',
+                    input: { command: event.item.command },
+                  }]
+                }
+              };
+              // Tool result
+              yield {
+                type: 'system',
+                subtype: 'tool_result',
+                content: event.item.aggregated_output,
                 exit_code: event.item.exit_code,
               };
             } else if (event.item.type === "file_change") {
               yield {
-                type: 'tool_use',
-                name: 'file_change',
-                changes: event.item.changes,
+                type: 'assistant',
+                message: {
+                  content: [{
+                    type: 'tool_use',
+                    name: 'file_change',
+                  }]
+                }
               };
             } else if (event.item.type === "mcp_tool_call") {
               yield {
-                type: 'tool_use',
-                name: `mcp__${event.item.server}__${event.item.tool}`,
-                status: event.item.status,
+                type: 'assistant',
+                message: {
+                  content: [{
+                    type: 'tool_use',
+                    name: `mcp__${event.item.server}__${event.item.tool}`,
+                  }]
+                }
               };
             }
             break;
 
           case "turn.completed":
-            yield {
-              type: 'usage',
-              input_tokens: event.usage?.input_tokens,
-              output_tokens: event.usage?.output_tokens,
-            };
+            // Track usage for final result
+            totalInputTokens += event.usage?.input_tokens || 0;
+            totalOutputTokens += event.usage?.output_tokens || 0;
             break;
 
           case "turn.failed":
-            yield { type: 'error', message: event.error?.message };
+            // Match Anthropic error format
+            yield {
+              type: 'result',
+              subtype: 'error',
+              errors: [{ message: event.error?.message || 'Unknown error' }]
+            };
             break;
         }
       }
+
+      // Emit final result with cost estimate (matching Anthropic format)
+      // Rough cost estimate: $0.01 per 1K input, $0.03 per 1K output (varies by model)
+      const estimatedCost = (totalInputTokens * 0.00001) + (totalOutputTokens * 0.00003);
+      yield {
+        type: 'result',
+        subtype: 'success',
+        total_cost_usd: estimatedCost,
+      };
+
     } catch (error) {
       logger.error("[codex] Query failed:", error);
       throw new Error(
