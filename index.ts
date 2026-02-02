@@ -144,8 +144,13 @@ interface CodexAuthState {
 }
 
 function loadCodexCredentials(): CodexAuthState | null {
-  if (!existsSync(CODEX_AUTH_FILE)) return null;
+  logger.info(`[codex] loadCodexCredentials() checking ${CODEX_AUTH_FILE}`);
+  if (!existsSync(CODEX_AUTH_FILE)) {
+    logger.info(`[codex] loadCodexCredentials() file not found`);
+    return null;
+  }
   try {
+    logger.info(`[codex] loadCodexCredentials() file exists, parsing...`);
     const data = JSON.parse(readFileSync(CODEX_AUTH_FILE, "utf-8"));
 
     // Check for OAuth tokens first
@@ -187,16 +192,22 @@ function getApiKeyFromEnv(): string | null {
 }
 
 function getAuth(): CodexAuthState | null {
+  logger.info(`[codex] getAuth() called, checking ${CODEX_AUTH_FILE}`);
   // Check Codex CLI credentials first (like Anthropic checks Claude Code)
   const codexAuth = loadCodexCredentials();
-  if (codexAuth) return codexAuth;
+  if (codexAuth) {
+    logger.info(`[codex] getAuth() found auth type: ${codexAuth.type}`);
+    return codexAuth;
+  }
 
   // Fall back to environment variable
   const envKey = getApiKeyFromEnv();
   if (envKey && envKey.startsWith("sk-")) {
+    logger.info(`[codex] getAuth() found env API key`);
     return { type: "api_key", apiKey: envKey };
   }
 
+  logger.info(`[codex] getAuth() no credentials found`);
   return null;
 }
 

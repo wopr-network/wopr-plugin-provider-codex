@@ -25,9 +25,13 @@ let CodexSDK;
 // =============================================================================
 const CODEX_AUTH_FILE = join(homedir(), ".codex", "auth.json");
 function loadCodexCredentials() {
-    if (!existsSync(CODEX_AUTH_FILE))
+    logger.info(`[codex] loadCodexCredentials() checking ${CODEX_AUTH_FILE}`);
+    if (!existsSync(CODEX_AUTH_FILE)) {
+        logger.info(`[codex] loadCodexCredentials() file not found`);
         return null;
+    }
     try {
+        logger.info(`[codex] loadCodexCredentials() file exists, parsing...`);
         const data = JSON.parse(readFileSync(CODEX_AUTH_FILE, "utf-8"));
         // Check for OAuth tokens first
         if (data.tokens?.access_token) {
@@ -65,15 +69,20 @@ function getApiKeyFromEnv() {
     return process.env.OPENAI_API_KEY || null;
 }
 function getAuth() {
+    logger.info(`[codex] getAuth() called, checking ${CODEX_AUTH_FILE}`);
     // Check Codex CLI credentials first (like Anthropic checks Claude Code)
     const codexAuth = loadCodexCredentials();
-    if (codexAuth)
+    if (codexAuth) {
+        logger.info(`[codex] getAuth() found auth type: ${codexAuth.type}`);
         return codexAuth;
+    }
     // Fall back to environment variable
     const envKey = getApiKeyFromEnv();
     if (envKey && envKey.startsWith("sk-")) {
+        logger.info(`[codex] getAuth() found env API key`);
         return { type: "api_key", apiKey: envKey };
     }
+    logger.info(`[codex] getAuth() no credentials found`);
     return null;
 }
 function hasCredentials() {
