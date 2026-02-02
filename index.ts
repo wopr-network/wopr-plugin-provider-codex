@@ -98,9 +98,10 @@ interface WOPRPlugin {
   shutdown(): Promise<void>;
 }
 
-// Setup winston logger
+// Setup winston logger - use LOG_LEVEL env var or default to info
+const logLevel = process.env.LOG_LEVEL || "info";
 const logger = winston.createLogger({
-  level: "info",
+  level: logLevel,
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
@@ -108,7 +109,7 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: "wopr-plugin-provider-codex" },
   transports: [
-    new winston.transports.Console({ level: "warn" })
+    new winston.transports.Console()
   ],
 });
 
@@ -569,12 +570,19 @@ class CodexClient implements ModelClient {
   }
 
   async healthCheck(): Promise<boolean> {
+    logger.info(`[codex] Health check starting, authType: ${this.authType}`);
     try {
       const codex = await this.getCodex();
+      logger.info(`[codex] Got Codex instance, starting thread...`);
       const thread = codex.startThread();
+      logger.info(`[codex] Thread started: ${!!thread}`);
       return !!thread;
     } catch (error) {
-      logger.error("[codex] Health check failed:", error);
+      logger.error(`[codex] Health check failed: ${error}`);
+      if (error instanceof Error) {
+        logger.error(`[codex] Health check error message: ${error.message}`);
+        logger.error(`[codex] Health check error stack: ${error.stack}`);
+      }
       return false;
     }
   }
