@@ -76,7 +76,7 @@ interface WOPRPluginContext {
     log: {
         info: (msg: string) => void;
     };
-    registerProvider: (provider: ModelProvider) => void;
+    registerLLMProvider: (provider: ModelProvider) => void;
     registerConfigSchema: (name: string, schema: ConfigSchema) => void;
 }
 interface WOPRPlugin {
