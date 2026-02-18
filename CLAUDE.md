@@ -14,7 +14,7 @@ npm test          # vitest run
 ## Key Details
 
 - Implements `ProviderPlugin` from `@wopr-network/plugin-types`
-- Uses `@anthropic-ai/claude-agent-sdk` at v2+ — check SDK docs before making API changes
+- Uses `@openai/codex-sdk` — check SDK docs before making API changes
 - Configured via plugin config schema
 
 ## Plugin Contract
