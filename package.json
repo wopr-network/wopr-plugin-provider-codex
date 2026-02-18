@@ -6,7 +6,11 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "check": "biome check index.ts",
+    "format": "biome format --write index.ts",
+    "lint": "biome check index.ts",
+    "lint:fix": "biome check --fix index.ts"
   },
   "keywords": [
     "wopr",
