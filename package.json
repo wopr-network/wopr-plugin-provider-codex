@@ -2,7 +2,7 @@
   "name": "wopr-plugin-provider-codex",
   "version": "2.0.0",
   "description": "Codex agent SDK provider for WOPR",
-  "main": "index.js",
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
     "build": "tsc",
