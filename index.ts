@@ -118,6 +118,26 @@ const logger = winston.createLogger({
 // Retry utility with exponential backoff
 // =============================================================================
 
+function getErrorStatus(err: unknown): number | undefined {
+	if (
+		typeof err === "object" &&
+		err !== null &&
+		"status" in err &&
+		typeof (err as { status: unknown }).status === "number"
+	) {
+		return (err as { status: number }).status;
+	}
+	if (
+		typeof err === "object" &&
+		err !== null &&
+		"statusCode" in err &&
+		typeof (err as { statusCode: unknown }).statusCode === "number"
+	) {
+		return (err as { statusCode: number }).statusCode;
+	}
+	return undefined;
+}
+
 interface RetryOptions {
 	maxRetries?: number;
 	baseDelayMs?: number;
@@ -140,7 +160,7 @@ export async function retryWithBackoff<T>(
 			if (attempt === maxRetries) throw error;
 
 			const msg = error instanceof Error ? error.message : String(error);
-			const status = (error as any)?.status ?? (error as any)?.statusCode;
+			const status = getErrorStatus(error);
 			const isRetryable =
 				(status && retryableCodes.includes(status)) ||
 				msg.includes("ECONNRESET") ||
