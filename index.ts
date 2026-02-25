@@ -114,6 +114,74 @@ const logger = winston.createLogger({
 	transports: [new winston.transports.Console()],
 });
 
+// =============================================================================
+// Retry utility with exponential backoff
+// =============================================================================
+
+function getErrorStatus(err: unknown): number | undefined {
+	if (
+		typeof err === "object" &&
+		err !== null &&
+		"status" in err &&
+		typeof (err as { status: unknown }).status === "number"
+	) {
+		return (err as { status: number }).status;
+	}
+	if (
+		typeof err === "object" &&
+		err !== null &&
+		"statusCode" in err &&
+		typeof (err as { statusCode: unknown }).statusCode === "number"
+	) {
+		return (err as { statusCode: number }).statusCode;
+	}
+	return undefined;
+}
+
+interface RetryOptions {
+	maxRetries?: number;
+	baseDelayMs?: number;
+	retryableStatusCodes?: number[];
+}
+
+export async function retryWithBackoff<T>(
+	fn: () => Promise<T>,
+	opts: RetryOptions = {},
+	logr: { warn: (msg: string) => void },
+): Promise<T> {
+	const maxRetries = opts.maxRetries ?? 3;
+	const baseDelayMs = opts.baseDelayMs ?? 1000;
+	const retryableCodes = opts.retryableStatusCodes ?? [429, 503];
+
+	for (let attempt = 0; attempt <= maxRetries; attempt++) {
+		try {
+			return await fn();
+		} catch (error: unknown) {
+			if (attempt === maxRetries) throw error;
+
+			const msg = error instanceof Error ? error.message : String(error);
+			const status = getErrorStatus(error);
+			const isRetryable =
+				(status && retryableCodes.includes(status)) ||
+				msg.includes("ECONNRESET") ||
+				msg.includes("ECONNREFUSED") ||
+				msg.includes("ETIMEDOUT") ||
+				msg.includes("fetch failed") ||
+				msg.toLowerCase().includes("network error") ||
+				msg.includes("socket hang up");
+
+			if (!isRetryable) throw error;
+
+			const delay = baseDelayMs * 2 ** attempt;
+			logr.warn(
+				`[retry] Attempt ${attempt + 1}/${maxRetries} failed (${status || msg.slice(0, 80)}), retrying in ${delay}ms`,
+			);
+			await new Promise((r) => setTimeout(r, delay));
+		}
+	}
+	throw new Error("unreachable");
+}
+
 let CodexSDK: any;
 
 // =============================================================================
@@ -502,7 +570,11 @@ class CodexClient implements ModelClient {
 
 			// Use streaming to get real-time events
 			logger.info(`[codex] query() calling runStreamed...`);
-			const { events } = await thread.runStreamed(prompt);
+			const { events } = await retryWithBackoff<any>(
+				() => thread.runStreamed(prompt),
+				{ maxRetries: 3, baseDelayMs: 1000 },
+				logger,
+			);
 			logger.info(`[codex] query() got events iterator, starting iteration...`);
 
 			for await (const event of events) {
