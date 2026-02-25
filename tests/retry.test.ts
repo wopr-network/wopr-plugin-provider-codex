@@ -54,6 +54,24 @@ describe("retryWithBackoff", () => {
 		expect(fn).toHaveBeenCalledTimes(2);
 	});
 
+	it("retries on 'network error' message (case-insensitive)", async () => {
+		const { retryWithBackoff } = await import("../index.js");
+		const fn = vi.fn()
+			.mockRejectedValueOnce(new Error("Network Error"))
+			.mockResolvedValue("ok");
+		const result = await retryWithBackoff(fn, { baseDelayMs: 1 }, { warn: vi.fn() });
+		expect(result).toBe("ok");
+		expect(fn).toHaveBeenCalledTimes(2);
+	});
+
+	it("does NOT retry on generic 'network' messages (e.g. 'neural network error')", async () => {
+		const { retryWithBackoff } = await import("../index.js");
+		const fn = vi.fn().mockRejectedValue(new Error("neural network computation failed"));
+		await expect(retryWithBackoff(fn, { baseDelayMs: 1 }, { warn: vi.fn() }))
+			.rejects.toThrow("neural network computation failed");
+		expect(fn).toHaveBeenCalledTimes(1);
+	});
+
 	it("does NOT retry on non-retryable errors (e.g. 401)", async () => {
 		const { retryWithBackoff } = await import("../index.js");
 		const error401 = Object.assign(new Error("unauthorized"), { status: 401 });

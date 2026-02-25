@@ -147,7 +147,7 @@ export async function retryWithBackoff<T>(
 				msg.includes("ECONNREFUSED") ||
 				msg.includes("ETIMEDOUT") ||
 				msg.includes("fetch failed") ||
-				msg.includes("network") ||
+				msg.toLowerCase().includes("network error") ||
 				msg.includes("socket hang up");
 
 			if (!isRetryable) throw error;
@@ -550,7 +550,7 @@ class CodexClient implements ModelClient {
 
 			// Use streaming to get real-time events
 			logger.info(`[codex] query() calling runStreamed...`);
-			const { events } = await retryWithBackoff(
+			const { events } = await retryWithBackoff<any>(
 				() => thread.runStreamed(prompt),
 				{ maxRetries: 3, baseDelayMs: 1000 },
 				logger,
@@ -695,11 +695,7 @@ class CodexClient implements ModelClient {
 		try {
 			const codex = await this.getCodex();
 			logger.info(`[codex] Got Codex instance, starting thread...`);
-			const thread = await retryWithBackoff(
-				async () => codex.startThread(),
-				{ maxRetries: 3, baseDelayMs: 1000 },
-				logger,
-			);
+			const thread = codex.startThread();
 			logger.info(`[codex] Thread started: ${!!thread}`);
 			return !!thread;
 		} catch (error) {
