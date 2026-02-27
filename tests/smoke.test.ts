@@ -4,8 +4,8 @@ vi.mock("@openai/codex-sdk", () => ({
 	Codex: vi.fn(),
 }));
 
-vi.mock("fs", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("fs")>();
+vi.mock("node:fs", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:fs")>();
 	return {
 		...actual,
 		existsSync: vi.fn(() => false),
