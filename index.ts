@@ -6,34 +6,16 @@
  * Install: wopr plugin install wopr-plugin-provider-codex
  */
 
-import { existsSync, readFileSync } from "fs";
-import { homedir } from "os";
-import { join } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import type {
+	A2AServerConfig,
+	PluginManifest,
+	WOPRPlugin,
+	WOPRPluginContext,
+} from "@wopr-network/plugin-types";
 import winston from "winston";
-
-// Type definitions (peer dependency from wopr)
-interface A2AToolResult {
-	content: Array<{
-		type: "text" | "image" | "resource";
-		text?: string;
-		data?: string;
-		mimeType?: string;
-	}>;
-	isError?: boolean;
-}
-
-interface A2AToolDefinition {
-	name: string;
-	description: string;
-	inputSchema: Record<string, unknown>;
-	handler: (args: Record<string, unknown>) => Promise<A2AToolResult>;
-}
-
-interface A2AServerConfig {
-	name: string;
-	version?: string;
-	tools: A2AToolDefinition[];
-}
 
 interface ModelQueryOptions {
 	prompt: string;
@@ -68,37 +50,6 @@ interface ModelProvider {
 		options?: Record<string, unknown>,
 	): Promise<ModelClient>;
 	getCredentialType(): "api-key" | "oauth" | "custom";
-}
-
-interface ConfigField {
-	name: string;
-	type: string;
-	label: string;
-	placeholder?: string;
-	required?: boolean;
-	description?: string;
-	options?: Array<{ value: string; label: string }>;
-	default?: unknown;
-}
-
-interface ConfigSchema {
-	title: string;
-	description: string;
-	fields: ConfigField[];
-}
-
-interface WOPRPluginContext {
-	log: { info: (msg: string) => void };
-	registerLLMProvider: (provider: ModelProvider) => void;
-	registerConfigSchema: (name: string, schema: ConfigSchema) => void;
-}
-
-interface WOPRPlugin {
-	name: string;
-	version: string;
-	description: string;
-	init(ctx: WOPRPluginContext): Promise<void>;
-	shutdown(): Promise<void>;
 }
 
 // Setup winston logger - use LOG_LEVEL env var or default to info
@@ -274,7 +225,7 @@ function getAuth(): CodexAuthState | null {
 
 	// Fall back to environment variable
 	const envKey = getApiKeyFromEnv();
-	if (envKey && envKey.startsWith("sk-")) {
+	if (envKey?.startsWith("sk-")) {
 		logger.info(`[codex] getAuth() found env API key`);
 		return { type: "api_key", apiKey: envKey };
 	}
@@ -314,7 +265,7 @@ function getAuthMethods(): AuthMethodInfo[] {
 			available: hasEnvKey,
 			requiresInput: false,
 			setupInstructions: hasEnvKey
-				? [`Using key from OPENAI_API_KEY (${envKey!.slice(0, 10)}...)`]
+				? [`Using key from OPENAI_API_KEY (${envKey?.slice(0, 10)}...)`]
 				: ["Set OPENAI_API_KEY environment variable"],
 			docsUrl: "https://platform.openai.com/api-keys",
 		},
@@ -347,7 +298,7 @@ async function loadCodexSDK() {
 		try {
 			const codex = await import("@openai/codex-sdk");
 			CodexSDK = codex;
-		} catch (error) {
+		} catch (_error) {
 			throw new Error(
 				"Codex SDK not installed. Run: npm install @openai/codex-sdk",
 			);
@@ -392,7 +343,7 @@ const codexProvider: ModelProvider & {
 
 	async validateCredentials(credential: string): Promise<boolean> {
 		logger.info(
-			`[codex] validateCredentials() called with credential: ${credential ? credential.substring(0, 10) + "..." : "empty"}`,
+			`[codex] validateCredentials() called with credential: ${credential ? `${credential.substring(0, 10)}...` : "empty"}`,
 		);
 		// Empty credential is valid if we have OAuth or env-based auth
 		if (!credential || credential === "") {
@@ -452,7 +403,7 @@ class CodexClient implements ModelClient {
 		private options?: Record<string, unknown>,
 	) {
 		// Determine auth type (like Anthropic client)
-		if (credential && credential.startsWith("sk-")) {
+		if (credential?.startsWith("sk-")) {
 			this.authType = "api_key";
 		} else {
 			const auth = getAuth();
@@ -729,6 +680,52 @@ class CodexClient implements ModelClient {
 	}
 }
 
+const manifest: PluginManifest = {
+	name: "@wopr-network/wopr-plugin-provider-codex",
+	version: "2.0.0",
+	description: "Codex agent SDK provider with OAuth and API key support",
+	author: "WOPR Network",
+	license: "MIT",
+	repository: "https://github.com/wopr-network/wopr-plugin-provider-codex",
+	capabilities: ["provider"],
+	category: "ai-provider",
+	icon: "🔮",
+	tags: ["codex", "openai", "ai", "provider", "oauth", "agent-sdk"],
+	requires: {
+		network: {
+			outbound: true,
+			hosts: ["api.openai.com"],
+		},
+	},
+	configSchema: {
+		title: "Codex",
+		description: "Configure Codex authentication",
+		fields: [
+			{
+				name: "authMethod",
+				type: "select",
+				label: "Authentication Method",
+				description: "Choose how to authenticate with Codex",
+				setupFlow: "paste",
+			},
+			{
+				name: "apiKey",
+				type: "password",
+				label: "API Key",
+				placeholder: "sk-...",
+				required: false,
+				description: "Only needed for API Key auth method",
+				secret: true,
+				setupFlow: "paste",
+			},
+		],
+	},
+	lifecycle: {
+		shutdownBehavior: "graceful",
+		shutdownTimeoutMs: 10000,
+	},
+};
+
 /**
  * Plugin export
  */
@@ -736,6 +733,7 @@ const plugin: WOPRPlugin = {
 	name: "provider-codex",
 	version: "2.0.0",
 	description: "Codex agent SDK provider with OAuth and API key support",
+	manifest,
 
 	async init(ctx: WOPRPluginContext) {
 		ctx.log.info("Registering Codex provider...");
