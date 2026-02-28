@@ -117,7 +117,7 @@ function captureProvider(plugin: any): any {
 	let capturedProvider: any;
 	const ctx = {
 		log: { info: vi.fn() },
-		registerLLMProvider: (p: any) => {
+		registerProvider: (p: any) => {
 			capturedProvider = p;
 		},
 		registerConfigSchema: vi.fn(),

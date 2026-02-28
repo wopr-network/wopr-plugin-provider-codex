@@ -43,12 +43,12 @@ describe("provider-codex plugin", () => {
 
 		const ctx = {
 			log: { info: vi.fn() },
-			registerLLMProvider: vi.fn(),
+			registerProvider: vi.fn(),
 			registerConfigSchema: vi.fn(),
 		};
 
 		await expect(plugin.init?.(ctx as any)).resolves.not.toThrow();
-		expect(ctx.registerLLMProvider).toHaveBeenCalledTimes(1);
+		expect(ctx.registerProvider).toHaveBeenCalledTimes(1);
 	});
 
 	it("shutdown completes without throwing", async () => {
