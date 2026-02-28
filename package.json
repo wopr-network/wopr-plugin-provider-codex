@@ -3,17 +3,16 @@
   "dependencies": {
     "@openai/codex": "^0.93.0",
     "@openai/codex-sdk": "^0.58.0",
+    "@wopr-network/plugin-types": "^0.7.1",
     "winston": "^3.11.0"
   },
   "peerDependencies": {
-    "@wopr-network/plugin-types": "^0.7.0",
     "zod": ">=3.0.0"
   },
   "description": "Codex agent SDK provider for WOPR",
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
     "@types/node": "^22.0.0",
-    "@wopr-network/plugin-types": "^0.7.1",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
   },
