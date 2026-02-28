@@ -41,7 +41,7 @@ beforeEach(async () => {
 	const plugin = mod.default;
 	const ctx = {
 		log: { info: vi.fn() },
-		registerLLMProvider: (p: any) => {
+		registerProvider: (p: any) => {
 			provider = p;
 		},
 		registerConfigSchema: vi.fn(),
