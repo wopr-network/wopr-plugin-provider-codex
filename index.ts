@@ -311,7 +311,7 @@ async function loadCodexSDK() {
  * Map temperature (0-1) to Codex reasoning effort
  * Lower temp = more deterministic = higher effort
  */
-function temperatureToEffort(
+export function temperatureToEffort(
 	temp?: number,
 ): "minimal" | "low" | "medium" | "high" | "xhigh" {
 	if (temp === undefined) return "medium";
