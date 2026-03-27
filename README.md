@@ -1,3 +1,11 @@
+# ⚠️ This package has moved
+
+This package is now maintained in the [wopr-plugins monorepo](https://github.com/wopr-network/wopr-plugins/tree/main/packages/plugin-provider-codex).
+
+This repository is archived and no longer accepts contributions.
+
+---
+
 # wopr-plugin-provider-codex
 
 [![npm version](https://img.shields.io/npm/v/wopr-plugin-provider-codex.svg)](https://www.npmjs.com/package/wopr-plugin-provider-codex)
